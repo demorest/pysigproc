@@ -17,8 +17,11 @@ class SigprocFile(object):
     _type['telescope_id'] = 'int'
     _type['src_raj'] = 'double'
     _type['src_dej'] = 'double'
+    _type['az_start'] = 'double'
+    _type['za_start'] = 'double'
     _type['data_type'] = 'int'
     _type['fch1'] = 'double'
+    _type['foff'] = 'double'
     _type['nchans'] = 'int'
     _type['nbeams'] = 'int'
     _type['ibeam'] = 'int'
@@ -68,7 +71,7 @@ class SigprocFile(object):
     @staticmethod
     def get_string(fp):
         """Read the next sigproc-format string in the file."""
-        nchar = struct.unpack('i',fp.read(4))
+        nchar = struct.unpack('i',fp.read(4))[0]
         if nchar>80 or nchar<1: 
             return (None, 0)
         out = fp.read(nchar)
@@ -80,17 +83,22 @@ class SigprocFile(object):
         self.hdrbytes = 0
         (s,n) = self.get_string(self.fp)
         if s != 'HEADER_START':
-            raise RuntimeError('File does not start with HEADER_START.')
+            raise RuntimeError("File does not start with HEADER_START (read '%s')" % s)
         self.hdrbytes += n
         while True:
             (s,n) = self.get_string(self.fp)
             self.hdrbytes += n
             if s == 'HEADER_END': return
-            datatype = self._type[s][0]
-            datasize = struct.calcsize(datatype)
-            val = struct.unpack(datatype,self.fp.read(datasize))
-            setattr(self,s,val)
-            self.hdrbytes += datasize
+            if self._type[s] == 'string':
+                (v,n) = self.get_string(self.fp)
+                self.hdrbytes += n
+                setattr(self,s,v)
+            else:
+                datatype = self._type[s][0]
+                datasize = struct.calcsize(datatype)
+                val = struct.unpack(datatype,self.fp.read(datasize))[0]
+                setattr(self,s,val)
+                self.hdrbytes += datasize
 
 
 
