@@ -6,6 +6,8 @@
 import sys
 import struct
 from collections import OrderedDict
+import mmap
+import numpy
 
 class SigprocFile(object):
 
@@ -30,13 +32,21 @@ class SigprocFile(object):
     _type['tsamp'] = 'double'
     _type['nifs'] = 'int'
 
-    def __init__(self,fp=None):
-        self.fp = fp
+    def __init__(self,fp=None,copy_hdr=None):
         # init all items to None
         for k in self._type.keys():
             setattr(self, k, None)
-        if self.fp is not None:
-            self.read_header(fp)
+        if copy_hdr is not None:
+            for k in self._type.keys():
+                setattr(self,k,getattr(copy_hdr,k))
+        if fp is not None:
+            try:
+                self.fp = open(fp,'r')
+            except TypeError:
+                self.fp = fp
+            self.read_header(self.fp)
+            self._mmdata = mmap.mmap(self.fp.fileno(), 0, mmap.MAP_PRIVATE, 
+                    mmap.PROT_READ)
 
     ## See sigproc send_stuff.c
 
@@ -99,6 +109,38 @@ class SigprocFile(object):
                 val = struct.unpack(datatype,self.fp.read(datasize))[0]
                 setattr(self,s,val)
                 self.hdrbytes += datasize
+
+    @property
+    def dtype(self):
+        if self.nbits==8:
+            return numpy.uint8
+        elif self.nbits==16:
+            return numpy.uint16
+        elif self.nbits==32:
+            return numpy.float32
+        else:
+            raise RuntimeError('nbits=%d not supported' % self.nbits)
+
+    @property
+    def bytes_per_spectrum(self):
+        return self.nbits * self.nchans * self.nifs / 8
+
+    @property
+    def nspectra(self):
+        return self._mmdata.size() / self.bytes_per_spectrum
+
+    @property
+    def tend(self):
+        return self.tstart + self.nspectra*self.tsamp/86400.0
+
+    def get_data(self,nstart,nsamp):
+        """Return nsamp time slices starting at nstart."""
+        bstart = nstart * self.bytes_per_spectrum
+        nbytes = nsamp * self.bytes_per_spectrum
+        b0 = self.hdrbytes + bstart
+        b1 = b0 + nbytes
+        return numpy.frombuffer(self._mmdata[b0:b1],
+                dtype=self.dtype).reshape((-1,self.nifs,self.nchans))
 
 
 
