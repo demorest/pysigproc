@@ -135,8 +135,8 @@ class SigprocFile(object):
 
     def get_data(self,nstart,nsamp):
         """Return nsamp time slices starting at nstart."""
-        bstart = nstart * self.bytes_per_spectrum
-        nbytes = nsamp * self.bytes_per_spectrum
+        bstart = int(nstart) * self.bytes_per_spectrum
+        nbytes = int(nsamp) * self.bytes_per_spectrum
         b0 = self.hdrbytes + bstart
         b1 = b0 + nbytes
         return numpy.frombuffer(self._mmdata[b0:b1],
