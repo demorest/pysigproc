@@ -128,7 +128,7 @@ class SigprocFile(object):
 
     @property
     def nspectra(self):
-        return self._mmdata.size() / self.bytes_per_spectrum
+        return (self._mmdata.size() - self.hdrbytes) / self.bytes_per_spectrum
 
     @property
     def tend(self):
