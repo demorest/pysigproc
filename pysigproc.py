@@ -2,6 +2,7 @@
 #
 # Simple functions for generating sigproc filterbank
 # files from python.  Not all possible features are implemented.
+# now works with python3 also!
 
 import sys
 import struct
@@ -17,6 +18,7 @@ class SigprocFile(object):
     _type['source_name'] = 'string'
     _type['machine_id'] = 'int'
     _type['barycentric'] = 'int'
+    _type['pulsarcentric'] = 'int'
     _type['telescope_id'] = 'int'
     _type['src_raj'] = 'double'
     _type['src_dej'] = 'double'
@@ -35,14 +37,14 @@ class SigprocFile(object):
 
     def __init__(self,fp=None,copy_hdr=None):
         # init all items to None
-        for k in self._type.keys():
+        for k in list(self._type.keys()):
             setattr(self, k, None)
         if copy_hdr is not None:
-            for k in self._type.keys():
+            for k in list(self._type.keys()):
                 setattr(self,k,getattr(copy_hdr,k))
         if fp is not None:
             try:
-                self.fp = open(fp,'r')
+                self.fp = open(fp,'rb')
             except TypeError:
                 self.fp = fp
             self.read_header(self.fp)
@@ -73,7 +75,7 @@ class SigprocFile(object):
 
     def filterbank_header(self,fout=sys.stdout):
         self.send_string("HEADER_START",f=fout)
-        for k in self._type.keys():
+        for k in list(self._type.keys()):
             self.send(k,fout)
         self.send_string("HEADER_END",f=fout)
 
@@ -93,11 +95,12 @@ class SigprocFile(object):
         if fp is not None: self.fp = fp
         self.hdrbytes = 0
         (s,n) = self.get_string(self.fp)
-        if s != 'HEADER_START':
+        if s != b'HEADER_START':
             raise RuntimeError("File does not start with HEADER_START (read '%s')" % s)
         self.hdrbytes += n
         while True:
             (s,n) = self.get_string(self.fp)
+            s=s.decode()
             self.hdrbytes += n
             if s == 'HEADER_END': return
             if self._type[s] == 'string':
@@ -140,7 +143,7 @@ class SigprocFile(object):
         nbytes = int(nsamp) * self.bytes_per_spectrum
         b0 = self.hdrbytes + bstart
         b1 = b0 + nbytes
-        return numpy.frombuffer(self._mmdata[b0:b1],
+        return numpy.frombuffer(self._mmdata[int(b0):int(b1)],
                 dtype=self.dtype).reshape((-1,self.nifs,self.nchans))
 
     def unpack(self,nstart,nsamp):
@@ -158,7 +161,7 @@ class SigprocFile(object):
                         (nsamp,self.nifs,self.nchans/fac))
         unpacked = numpy.empty((nsamp,self.nifs,self.nchans),
                 dtype=numpy.float32)
-        for i in xrange(fac):
+        for i in range(fac):
             mask = 2**(self.nbits*i)*(2**self.nbits-1)
             unpacked[...,i::fac] = (d & mask) / 2**(i*self.nbits)
         return unpacked
