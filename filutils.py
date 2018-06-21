@@ -38,3 +38,12 @@ def dedisp(img, dm,freq,t_bin,nchans):
     for ii, delay in enumerate(delay_bins):
         dedisp_arr[:,ii]=np.roll(img[:,ii],delay)
     return dedisp_arr
+
+def bandpass(fil_file):
+    """
+    no explanation needed
+    """
+    fil_obj=pysigproc.SigprocFile(fil_file)
+    bandpass=fil_obj.get_data(nstart=0,nsamp=int(fil_obj.nspectra))[:,0,:].sum(0)/fil_obj.nspectra
+    return(fil_obj.chan_freqs,bandpass)
+    
