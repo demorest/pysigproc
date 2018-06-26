@@ -8,5 +8,5 @@ setup(name='pysigproc',
       author='Paul Demorest, Devansh Agarwal',
       author_email='pdemores@nrao.edu, da0017@mix.wvu.edu',
       url='http://github.com/devanshkv/pysigproc',
-      py_modules=['pysigproc']
+      py_modules=['pysigproc,filutils']
      )
