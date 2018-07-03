@@ -55,6 +55,7 @@ class SigprocFile(object):
 
     @staticmethod
     def send_string(val,f=sys.stdout):
+        val=val.encode()
         f.write(struct.pack('i',len(val)))
         f.write(val)
 
