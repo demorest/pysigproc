@@ -43,5 +43,42 @@ def bandpass(fil_file):
     """
     fil_obj=pysigproc.SigprocFile(fil_file)
     bandpass=fil_obj.get_data(nstart=0,nsamp=int(fil_obj.nspectra))[:,0,:].sum(0)/fil_obj.nspectra
-    return(fil_obj.chan_freqs,bandpass)
-    
+    return(fil_obj.chan_freqs,bandpass) 
+
+def append_spectra(f, spectra):
+    # Move to end of file
+    f.seek(0, os.SEEK_END)
+    f.write(spectra.flatten().astype(spectra.dtype))
+
+
+def make_header(filobj):
+    filobj.source_name = 'source'
+    filobj.machine_id = int(0)
+    filobj.barycentric = int(0)
+    filobj.telescope_id = int(6)
+    filobj.src_raj = 123456
+    filobj.src_dej = 123456
+    filobj.fch1 = 1919.882812
+    filobj.foff = -0.234375
+    filobj.nchans = 4096
+    filobj.nbeams = 1
+    filobj.nbits = 8
+    filobj.tstart = 58289.609664351679
+    filobj.tsamp = 0.000256
+    filobj.nifs = 1
+    return filobj
+
+
+def write_header(filobj,filename):
+    '''
+    write fiterbank header
+    :param filobj: object from pysigproc
+    :param filename: file
+    :return : object from pysigproc
+    '''
+    with open(filename,'wb') as f:
+        filobj.send_string('HEADER_START',f)
+        for k in list(filobj._type.keys()):
+            filobj.send(k,f)
+        filobj.send_string('HEADER_END',f)
+    return filobj
