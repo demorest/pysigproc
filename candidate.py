@@ -2,14 +2,15 @@
 import numpy as np
 import pylab as plt 
 import h5py
-import filutils as fu
 from pysigproc import SigprocFile
+from scipy.optimize import golden
 
 class Candidate(SigprocFile):
-    def __init__(self,fp=None,dm=None,tcand=0):
-	    SigprocFile.__init__(self, fil_file)
-	    self.dm=dm
-	    self.tcand=tcand
+    def __init__(self,fp=None,dm=None,tcand=0,width=0):
+        SigprocFile.__init__(self, fp)
+        self.dm=dm
+        self.tcand=tcand
+        self.width=width
     
     def dispersion_delay(self,dms=None):
         if dms is None:
@@ -26,8 +27,8 @@ class Candidate(SigprocFile):
                 tstart = 0
         if tstop is None:
             tstop = self.tcand + self.dispersion_delay()
-            if tstop > cand.tend:
-                tstop = cand.tend
+            if tstop > self.tend:
+                tstop = self.tend
         nstart=int(tstart/self.tsamp)
         nsamp=int((tstop-tstart)/self.tsamp)
         self.data=self.get_data(nstart=nstart,nsamp=nsamp)[:,0,:]
@@ -42,22 +43,43 @@ class Candidate(SigprocFile):
             delay_time = 4148808.0*dms*(1/(self.chan_freqs[0])**2 - 1/(self.chan_freqs)**2)/1000
             delay_bins = np.round(delay_time/self.tsamp).astype('int64')
             dedisp_arr=np.zeros(self.data.shape)
-            data=np.zeros(self.data.shape)
-            for chan in range(nf):
-                data[:,chan]-=self.data.mean(1)
             for ii, delay in enumerate(delay_bins):
-                dedisp_arr[:,ii]=np.roll(data[:,ii],delay)
+                dedisp_arr[:,ii]=np.roll(self.data[:,ii],delay)
             self.dedispersed = dedisp_arr
         else:
             self.dedipersed = None
         return self
 
     def dmtime(self):
-        start=time.time()
         range=2*self.dm
         dm_list=self.dm+np.linspace(-range,range,100)
         dmt=np.zeros((100,self.data.shape[0]))
         for ii,dm in enumerate(dm_list):
             dmt[ii,:]=self.dedisperse(dms=dm).dedispersed.sum(1)
-        print('took', start-time.time(),' s')
         return dmt
+
+    def snr(self,time_series=None):
+        if time_series is None and self.dedispersed is None:
+            return None
+        if time_series is None:
+            x=self.dedispersed.mean(1)
+        else:
+            x=time_series
+        argmax=np.argmax(x)
+        mask=np.ones(len(x),dtype=np.bool)
+        mask[argmax - 2*self.width:argmax + 2*self.width]=0
+        x-=x[mask].mean()
+        std=np.std(x[mask])
+        return x.max()/std
+    
+    def optimize_dm(self):
+        if self.data is None:
+            return None
+        def dm2snr(dm):
+            time_series=self.dedisperse(dm).dedispersed.sum(1)
+            return -self.snr(time_series)
+        try:
+            out=golden(dm2snr,full_output=1,brack=(0,self.dm,2*self.dm),tol=1e-3)
+        except ValueError:
+            out=golden(dm2snr,full_output=1,tol=1e-3)
+        return out[0],-out[1]
