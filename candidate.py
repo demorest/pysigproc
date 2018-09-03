@@ -6,7 +6,7 @@ from pysigproc import SigprocFile
 from scipy.optimize import golden
 
 class Candidate(SigprocFile):
-    def __init__(self,fp=None,dm=None,tcand=0,width=0,label=np.nan,snr=None):
+    def __init__(self,fp=None,dm=None,tcand=0,width=0,label=-1,snr=None):
         SigprocFile.__init__(self, fp)
         self.dm=dm
         self.tcand=tcand
@@ -14,34 +14,44 @@ class Candidate(SigprocFile):
         self.label=label
         self.snr=snr
 
-    def save_h5(self,fnout=None):
+    def save_h5(self,out_dir=None,fnout=None):
+        cand_id = f'cand_tstart_{self.tstart:.12f}_tcand_{self.tcand:.7f}_dm_{self.dm:.5f}_snr_{self.snr:.5f}'
         if fnout is None:
-            fnout=f'cand_dm_{self.dm}_snr_{self.snr}_time_{self.tcand}.h5'
+            fnout= cand_id+'.h5'
+        if out_dir is not None:
+            fnout = out_dir + fnout
         with  h5py.File(fnout, 'w') as f:
+            f.attrs['cand_id'] = cand_id
+            f.attrs['tcand'] = self.tcand
+            f.attrs['dm'] = self.dm
+            f.attrs['dm_opt'] = self.dm_opt
+            f.attrs['snr'] = self.snr
+            f.attrs['snr_opt'] = self.snr_opt
+            f.attrs['width'] = self.width
+            f.attrs['label'] = self.label
+
+            # Copy over header information as attributes
+            for key in list(self._type.keys()):
+                if getattr(self, key) is not None: 
+                    f.attrs[key] = getattr(self,key)
+                else:
+                    f.attrs[key] = b'None'
+
             freq_time_dset = f.create_dataset('data_freq_time', data=self.dedispersed)
             freq_time_dset.dims[0].label = b"time"
             freq_time_dset.dims[1].label = b"frequency"
-
-            labels_dset =  f.create_dataset('labels', data=[self.label])
-            labels_dset.dims[0].label = b"labels"         
 
             if self.dmt is not None:
                 dm_time_dset = f.create_dataset('data_dm_time', data=self.dmt)
                 dm_time_dset.dims[0].label = b"dm"
                 dm_time_dset.dims[1].label = b"time"
+            
+                        
             #if params is not None:
             #    f.create_dataset('params', data=params)
             #if self.snr is not None:
             #    snr_dset = f.create_dataset('snr', data=self.snr)
             #    snr_dset.dim[0].label = b"snr"
-                
-            # Copy over header information as attributes
-            #for key in self._type.keys():
-            #    print(getattr(self, key))
-            #    if not getattr(self, key): 
-            #        freq_time_dset.attrs[key] = getattr(self, key)
-
-
         return fnout
     
     def dispersion_delay(self,dms=None):
@@ -115,6 +125,8 @@ class Candidate(SigprocFile):
             out=golden(dm2snr,full_output=1,brack=(-self.dm/2,self.dm,2*self.dm),tol=1e-3)
         except ValueError:
             out=golden(dm2snr,full_output=1,tol=1e-3)
+        self.dm_opt = out[0]
+        self.snr_opt = -out[1]
         return out[0],-out[1]
 
     
