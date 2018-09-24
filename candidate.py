@@ -13,9 +13,10 @@ class Candidate(SigprocFile):
         self.width=width
         self.label=label
         self.snr=snr
+        self.id=f'cand_tstart_{self.tstart:.12f}_tcand_{self.tcand:.7f}_dm_{self.dm:.5f}_snr_{self.snr:.5f}'
 
     def save_h5(self,out_dir=None,fnout=None):
-        cand_id = f'cand_tstart_{self.tstart:.12f}_tcand_{self.tcand:.7f}_dm_{self.dm:.5f}_snr_{self.snr:.5f}'
+        cand_id = self.id
         if fnout is None:
             fnout= cand_id+'.h5'
         if out_dir is not None:
@@ -75,7 +76,7 @@ class Candidate(SigprocFile):
         nsamp=int((tstop-tstart)/self.tsamp)
         if nsamp < 256:
             #if number of time samples less than 256, make it 256.
-            nstart-= int((256-nstart)/2)
+            nstart-= (256-nsamp)//2
             nsamp=256
         self.data=self.get_data(nstart=nstart,nsamp=nsamp)[:,0,:]
         return self
@@ -114,7 +115,7 @@ class Candidate(SigprocFile):
             x=time_series
         argmax=np.argmax(x)
         mask=np.ones(len(x),dtype=np.bool)
-        mask[argmax - 2*self.width//2:argmax + 2*self.width//2]=0
+        mask[argmax - self.width//2:argmax + self.width//2]=0
         x-=x[mask].mean()
         std=np.std(x[mask])
         return x.max()/std
