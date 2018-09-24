@@ -64,15 +64,19 @@ class Candidate(SigprocFile):
 
     def get_chunk(self,tstart=None,tstop=None):
         if tstart is None:
-            tstart = self.tcand - self.dispersion_delay()
+            tstart = self.tcand - self.dispersion_delay() - self.width*self.tsamp
             if tstart < 0:
                 tstart = 0
         if tstop is None:
-            tstop = self.tcand + self.dispersion_delay()
+            tstop = self.tcand + self.dispersion_delay() + self.width*self.tsamp
             if tstop > self.tend:
                 tstop = self.tend
         nstart=int(tstart/self.tsamp)
         nsamp=int((tstop-tstart)/self.tsamp)
+        if nsamp < 256:
+            #if number of time samples less than 256, make it 256.
+            nstart-= int((256-nstart)/2)
+            nsamp=256
         self.data=self.get_data(nstart=nstart,nsamp=nsamp)[:,0,:]
         return self
     
@@ -94,8 +98,8 @@ class Candidate(SigprocFile):
 
     def dmtime(self):
         range=2*self.dm
-        dm_list=self.dm+np.linspace(-range,range,100)
-        dmt=np.zeros((100,self.data.shape[0]))
+        dm_list=self.dm+np.linspace(-range,range,512)
+        dmt=np.zeros((512,self.data.shape[0]))
         for ii,dm in enumerate(dm_list):
             dmt[ii,:]=self.dedisperse(dms=dm).dedispersed.sum(1)
         self.dmt=dmt
@@ -110,7 +114,7 @@ class Candidate(SigprocFile):
             x=time_series
         argmax=np.argmax(x)
         mask=np.ones(len(x),dtype=np.bool)
-        mask[argmax - 2*self.width:argmax + 2*self.width]=0
+        mask[argmax - 2*self.width//2:argmax + 2*self.width//2]=0
         x-=x[mask].mean()
         std=np.std(x[mask])
         return x.max()/std
