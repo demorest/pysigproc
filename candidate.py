@@ -74,10 +74,14 @@ class Candidate(SigprocFile):
                 tstop = self.tend
         nstart=int(tstart/self.tsamp)
         nsamp=int((tstop-tstart)/self.tsamp)
-        if nsamp < 256:
+        if self.width < 2:
+            min_samp=256
+        else:
+            min_samp=self.width*256//2
+        if nsamp < min_samp:
             #if number of time samples less than 256, make it 256.
-            nstart-= (256-nsamp)//2
-            nsamp=256
+            nstart-= (min_samp-nsamp)//2
+            nsamp=min_samp
         self.data=self.get_data(nstart=nstart,nsamp=nsamp)[:,0,:]
         return self
     
@@ -98,9 +102,9 @@ class Candidate(SigprocFile):
         return self
 
     def dmtime(self):
-        range=2*self.dm
-        dm_list=self.dm+np.linspace(-range,range,512)
-        dmt=np.zeros((512,self.data.shape[0]))
+        range=self.dm/2
+        dm_list=self.dm+np.linspace(-range,range,256)
+        dmt=np.zeros((256,self.data.shape[0]))
         for ii,dm in enumerate(dm_list):
             dmt[ii,:]=self.dedisperse(dms=dm).dedispersed.sum(1)
         self.dmt=dmt
