@@ -4,9 +4,10 @@ import pylab as plt
 import h5py
 from pysigproc import SigprocFile
 from scipy.optimize import golden
+import tqdm
 
 class Candidate(SigprocFile):
-    def __init__(self,fp=None,dm=None,tcand=0,width=0,label=-1,snr=None):
+    def __init__(self,fp=None,dm=None,tcand=0,width=0,label=-1,snr=0):
         SigprocFile.__init__(self, fp)
         self.dm=dm
         self.tcand=tcand
@@ -14,6 +15,8 @@ class Candidate(SigprocFile):
         self.label=label
         self.snr=snr
         self.id=f'cand_tstart_{self.tstart:.12f}_tcand_{self.tcand:.7f}_dm_{self.dm:.5f}_snr_{self.snr:.5f}'
+        self.data=None
+        self.dedispersed=None
 
     def save_h5(self,out_dir=None,fnout=None):
         cand_id = self.id
@@ -46,15 +49,8 @@ class Candidate(SigprocFile):
                 dm_time_dset = f.create_dataset('data_dm_time', data=self.dmt)
                 dm_time_dset.dims[0].label = b"dm"
                 dm_time_dset.dims[1].label = b"time"
-            
-                        
-            #if params is not None:
-            #    f.create_dataset('params', data=params)
-            #if self.snr is not None:
-            #    snr_dset = f.create_dataset('snr', data=self.snr)
-            #    snr_dset.dim[0].label = b"snr"
         return fnout
-    
+
     def dispersion_delay(self,dms=None):
         if dms is None:
             dms=self.dm
@@ -84,7 +80,7 @@ class Candidate(SigprocFile):
             nsamp=min_samp
         self.data=self.get_data(nstart=nstart,nsamp=nsamp)[:,0,:]
         return self
-    
+
     def dedisperse(self,dms=None):
         if dms is None:
             dms=self.dm
@@ -102,10 +98,10 @@ class Candidate(SigprocFile):
         return self
 
     def dmtime(self):
-        range=self.dm/2
-        dm_list=self.dm+np.linspace(-range,range,256)
+        range_dm=self.dm
+        dm_list=self.dm+np.linspace(-range_dm,range_dm,256)
         dmt=np.zeros((256,self.data.shape[0]))
-        for ii,dm in enumerate(dm_list):
+        for ii,dm in enumerate(tqdm.tqdm(dm_list)):
             dmt[ii,:]=self.dedisperse(dms=dm).dedispersed.sum(1)
         self.dmt=dmt
         return self
@@ -123,7 +119,7 @@ class Candidate(SigprocFile):
         x-=x[mask].mean()
         std=np.std(x[mask])
         return x.max()/std
-    
+
     def optimize_dm(self):
         if self.data is None:
             return None
@@ -132,10 +128,8 @@ class Candidate(SigprocFile):
             return -self.get_snr(time_series)
         try:
             out=golden(dm2snr,full_output=1,brack=(-self.dm/2,self.dm,2*self.dm),tol=1e-3)
-        except ValueError:
+        except (ValueError,TypeError) as e:
             out=golden(dm2snr,full_output=1,tol=1e-3)
         self.dm_opt = out[0]
         self.snr_opt = -out[1]
         return out[0],-out[1]
-
-    
