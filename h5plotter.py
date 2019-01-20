@@ -42,10 +42,10 @@ def plot_h5(h5_file,show=False, save=True, detrend=True):
                     f.attrs['foff'],f.attrs['nchans'],f.attrs['dm'],f.attrs['cand_id'],\
                     f.attrs['tsamp'],f.attrs['dm_opt'],f.attrs['snr'],f.attrs['snr_opt'],f.attrs['width']
             if width > 1:
-                ts=np.arange(freq_time.shape[0])*tsamp*np.min([1,width//2])
+                ts=np.arange(freq_time.shape[1])*tsamp*np.min([1,width//2])
             else:
-                ts=np.arange(freq_time.shape[0])*tsamp*np.min([1,width])
-            ax1.plot(ts,freq_time.mean(0),'k-')
+                ts=np.arange(freq_time.shape[1])*tsamp*np.min([1,width])
+            ax1.plot(ts,freq_time.sum(0),'k-')
             ax1.set_ylabel('Flux (Arb. Units)')
             ax2.imshow(freq_time, aspect='auto',extent=[ts[0],ts[-1],fch1,fch1+(nchan*foff)],interpolation='none')
             ax2.set_ylabel('Frequency (MHz)')
