@@ -12,5 +12,5 @@ setup(name='pysigproc',
       author_email='pdemores@nrao.edu, da0017@mix.wvu.edu, ka0064@mix.wvu.edu',
       url='http://github.com/devanshkv/pysigproc',
       packages=find_packages(),
-      py_modules=['pysigproc','candidate','h5plotter']
-     )
+      py_modules={'pysigproc', 'candidate', 'h5plotter'}
+)
