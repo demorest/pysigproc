@@ -1,22 +1,124 @@
 #!/usr/bin/env python3
 import numpy as np
-import pylab as plt
 import h5py
 from pysigproc import SigprocFile
 from scipy.optimize import golden
 import tqdm
+from skimage.transform import resize
+import logging
+logger = logging.getLogger()
+logger = logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(threadName)s - %(levelname)s -'
+                                                        ' %(message)s')
+
+def _decimate(data, decimate_factor, axis, pad=False, **args):
+    """
+
+    :param data: data array to decimate
+    :param decimate_factor: number of samples to combine
+    :param axis: axis along which decimation is to be done
+    :param pad: Whether to apply padding if the data axis length is not a multiple of decimation factor
+    :param args: arguments of padding
+    :return:
+    """
+    if data.shape[axis] % decimate_factor and pad is True:
+        logging.info(f'padding along axis {axis}')
+        pad_width = closest_number(data.shape[axis], decimate_factor)
+        data = pad_along_axis(data, data.shape[axis] + pad_width, axis=axis, **args)
+    elif data.shape[axis] % decimate_factor and pad is False:
+        raise AttributeError('Axis length should be a multiple of decimate_factor. Use pad=True to force decimation')
+
+    if axis:
+        return data.reshape(data.shape[0], data.shape[1]//decimate_factor, decimate_factor).mean(2)
+    else:
+        return data.reshape(data.shape[0]//decimate_factor, decimate_factor, data.shape[1]).mean(1)
+
+
+def _resize(data, size, axis, **args):
+    """
+
+    :param data: data array to resize
+    :param size: required size of the axis
+    :param axis: axis long which resizing is to be done
+    :param args: arguments for skimage.transform resize function
+    :return:
+    """
+    if axis:
+        return resize(data, (data.shape[0], size), **args)
+    else:
+        return resize(data, (size, data.shape[1]), **args)
+
+
+def crop(data, start_sample, length, axis):
+    """
+
+    :param data: Data array to crop
+    :param start_sample: Sample to start the output cropped array
+    :param length: Final Length along the axis of the output
+    :param axis: Axis to crop
+    :return:
+    """
+    if data.shape[axis] >= start_sample + length:
+        if axis:
+            return data[:, start_sample:start_sample+length]
+        else:
+            return data[start_sample:start_sample + length, :]
+    else:
+        raise OverflowError('Specified length exceeds the size of data')
+
+
+def pad_along_axis(array: np.ndarray, target_length, loc='end', axis=0, **args):
+    """
+
+    :param array: Input array to pad
+    :param target_length: Required length of the axis
+    :param loc: Location to pad: start: pad in beginning, end: pad in end, else: pad equally on both sides
+    :param axis: Axis to pad along
+    :return:
+    """
+    pad_size = target_length - array.shape[axis]
+    axis_nb = len(array.shape)
+
+    if pad_size < 0:
+        return array
+        # return a
+
+    npad = [(0, 0) for x in range(axis_nb)]
+
+    if loc == 'start':
+        npad[axis] = (pad_size, 0)
+    elif loc == 'end':
+        npad[axis] = (0, pad_size)
+    else:
+        npad[axis] = (pad_size // 2, pad_size // 2)
+
+    return np.pad(array, pad_width=npad, **args)
+
+
+def closest_number(big_num, small_num):
+    """
+    Finds the difference between the closest multiple of a smaller number with respect to a bigger number
+    :param big_num: The bigger number to find the closest of
+    :param small_num: Number whose multiple is to be found and subtracted
+    :return:
+    """
+    if big_num % small_num == 0:
+        return 0
+    else:
+        q = big_num // small_num
+        return (q + 1) * small_num - big_num
 
 
 class Candidate(SigprocFile):
-    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0):
+    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256):
         """
 
-        :param fp:
-        :param dm:
-        :param tcand:
-        :param width:
-        :param label:
-        :param snr:
+        :param fp: Filepath of the filterbank
+        :param dm: DM of the candidate
+        :param tcand: Time of the candidate in filterbank file (seconds)
+        :param width: Width of the candidate (number of samples)
+        :param label: Label of the candidate (1: for FRB, 0: for RFI)
+        :param snr: SNR of the candidate
+        :param min_samp: Minimum number of time samples to read
         """
         SigprocFile.__init__(self, fp)
         self.dm = dm
@@ -27,12 +129,16 @@ class Candidate(SigprocFile):
         self.id = f'cand_tstart_{self.tstart:.12f}_tcand_{self.tcand:.7f}_dm_{self.dm:.5f}_snr_{self.snr:.5f}'
         self.data = None
         self.dedispersed = None
+        self.dmt = None
+        self.min_samp = min_samp
+        self.dm_opt = -1
+        self.snr_opt = -1
 
     def save_h5(self, out_dir=None, fnout=None):
         """
-
-        :param out_dir:
-        :param fnout:
+        Generates an h5 file of the candidate object
+        :param out_dir: Output directory to save the h5 file
+        :param fnout: Output name of the candidate file
         :return:
         """
         cand_id = self.id
@@ -40,7 +146,7 @@ class Candidate(SigprocFile):
             fnout = cand_id + '.h5'
         if out_dir is not None:
             fnout = out_dir + fnout
-        with  h5py.File(fnout, 'w') as f:
+        with h5py.File(fnout, 'w') as f:
             f.attrs['cand_id'] = cand_id
             f.attrs['tcand'] = self.tcand
             f.attrs['dm'] = self.dm
@@ -69,8 +175,8 @@ class Candidate(SigprocFile):
 
     def dispersion_delay(self, dms=None):
         """
-
-        :param dms:
+        Calculates the dispersion delay at a specified DM
+        :param dms: DM value to get dispersion delay
         :return:
         """
         if dms is None:
@@ -82,9 +188,9 @@ class Candidate(SigprocFile):
 
     def get_chunk(self, tstart=None, tstop=None):
         """
-
-        :param tstart:
-        :param tstop:
+        Read the data around the candidate from the filterbank
+        :param tstart: Start time in the fiterbank, to read from
+        :param tstop: End time in the filterbank, to read till
         :return:
         """
         if tstart is None:
@@ -98,20 +204,27 @@ class Candidate(SigprocFile):
         nstart = int(tstart / self.tsamp)
         nsamp = int((tstop - tstart) / self.tsamp)
         if self.width < 2:
-            min_samp = 256
+            nchunk = self.min_samp
         else:
-            min_samp = self.width * 256 // 2
-        if nsamp < min_samp:
-            # if number of time samples less than 256, make it 256.
-            nstart -= (min_samp - nsamp) // 2
-            nsamp = min_samp
-        self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
+            nchunk = self.width * self.min_samp // 2
+        if nsamp < nchunk:
+            # if number of time samples less than nchunk, make it min_samp.
+            nstart -= (nchunk - nsamp) // 2
+            nsamp = nchunk
+        if nstart < 0:
+            self.data = self.get_data(nstart=0, nsamp=nsamp+nstart)[:, 0, :]
+            self.data = pad_along_axis(self.data, nsamp, loc='start', axis=0, mode='median')
+        elif nstart+nsamp > self.nspectra:
+            self.data = self.get_data(nstart=nstart, nsamp=self.nspectra - nstart)[:, 0, :]
+            self.data = pad_along_axis(self.data, nsamp, loc='end', axis=0, mode='median')
+        else:
+            self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
         return self
 
     def dedisperse(self, dms=None):
         """
-
-        :param dms:
+        Dedisperse Frequency time data at a specified DM
+        :param dms: DM to dedisperse at
         :return:
         """
         if dms is None:
@@ -129,14 +242,15 @@ class Candidate(SigprocFile):
             self.dedispersed = None
         return self
 
-    def dmtime(self):
+    def dmtime(self, dmsteps=256):
         """
-
+        Generates DM-time array of the candidate by dedispersing at adjacent DM values
+        dmsteps: Number of DMs to dedisperse at
         :return:
         """
         range_dm = self.dm
-        dm_list = self.dm + np.linspace(-range_dm, range_dm, 256)
-        dmt = np.zeros((256, self.data.shape[0]))
+        dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
+        dmt = np.zeros((dmsteps, self.data.shape[0]))
         for ii, dm in enumerate(tqdm.tqdm(dm_list)):
             dmt[ii, :] = self.dedisperse(dms=dm).dedispersed.sum(1)
         self.dmt = dmt
@@ -144,8 +258,8 @@ class Candidate(SigprocFile):
 
     def get_snr(self, time_series=None):
         """
-
-        :param time_series:
+        Calculates the SNR of the candidate
+        :param time_series: time series array to calculate the SNR of
         :return:
         """
         if time_series is None and self.dedispersed is None:
@@ -163,8 +277,9 @@ class Candidate(SigprocFile):
 
     def optimize_dm(self):
         """
-
-        :return:
+        Calculate more precise value of the DM by interpolating between DM values to maximise the SNR
+        This function has not been fully tested.
+        :return: optimnised DM, optimised SNR
         """
         if self.data is None:
             return None
@@ -174,9 +289,44 @@ class Candidate(SigprocFile):
             return -self.get_snr(time_series)
 
         try:
-            out = golden(dm2snr, full_output=1, brack=(-self.dm / 2, self.dm, 2 * self.dm), tol=1e-3)
-        except (ValueError, TypeError) as e:
-            out = golden(dm2snr, full_output=1, tol=1e-3)
+            out = golden(dm2snr, full_output=True, brack=(-self.dm / 2, self.dm, 2 * self.dm), tol=1e-3)
+        except (ValueError, TypeError):
+            out = golden(dm2snr, full_output=True, tol=1e-3)
         self.dm_opt = out[0]
         self.snr_opt = -out[1]
         return out[0], -out[1]
+
+    def decimate(self, key, decimate_factor, axis, pad=False, **args):
+        """
+        TODO: Update candidate parameters as per decimation factor
+        :param key: Keywords to chose which data to decimate
+        :param decimate_factor: Number of samples to average
+        :param axis: Axis to decimate along
+        :param pad: Optional argument if padding is to be done
+        :args: arguments for numpy pad
+        :return:
+        """
+        if key == 'dmt':
+            self.dmt = _decimate(self.dmt, decimate_factor, axis, pad, **args)
+        elif key == 'ft':
+            self.dedispersed = _decimate(self.dedispersed, decimate_factor, axis, pad, **args)
+        else:
+            raise AttributeError('Key can either be "dmt": DM-Time or "ft": Frequency-Time')
+        return self
+
+    def resize(self, key, size, axis, **args):
+        """
+        TODO: Update candidate parameters as per final size
+        :param key: Keywords to chose which data to decimate
+        :param size: Final size of the data array required
+        :param axis: Axis to resize alone
+        :param args: Arguments for skimage.transform resize function
+        :return:
+        """
+        if key == 'dmt':
+            self.dmt = _resize(self.dmt, size, axis, **args)
+        elif key == 'ft':
+            self.dedispersed = _resize(self.dedispersed, size, axis, **args)
+        else:
+            raise AttributeError('Key can either be "dmt": DM-Time or "ft": Frequency-Time')
+        return self
