@@ -10,7 +10,7 @@ logger = logging.getLogger()
 logger = logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(threadName)s - %(levelname)s -'
                                                         ' %(message)s')
 
-def _decimate(data, decimate_factor, axis, pad=False, **args):
+def _decimate(data, decimate_factor, axis, pad=False, **kwargs):
     """
 
     :param data: data array to decimate
@@ -23,7 +23,7 @@ def _decimate(data, decimate_factor, axis, pad=False, **args):
     if data.shape[axis] % decimate_factor and pad is True:
         logging.info(f'padding along axis {axis}')
         pad_width = closest_number(data.shape[axis], decimate_factor)
-        data = pad_along_axis(data, data.shape[axis] + pad_width, axis=axis, **args)
+        data = pad_along_axis(data, data.shape[axis] + pad_width, axis=axis, **kwargs)
     elif data.shape[axis] % decimate_factor and pad is False:
         raise AttributeError('Axis length should be a multiple of decimate_factor. Use pad=True to force decimation')
 
@@ -33,7 +33,7 @@ def _decimate(data, decimate_factor, axis, pad=False, **args):
         return data.reshape(data.shape[0]//decimate_factor, decimate_factor, data.shape[1]).mean(1)
 
 
-def _resize(data, size, axis, **args):
+def _resize(data, size, axis, **kwargs):
     """
 
     :param data: data array to resize
@@ -43,9 +43,9 @@ def _resize(data, size, axis, **args):
     :return:
     """
     if axis:
-        return resize(data, (data.shape[0], size), **args)
+        return resize(data, (data.shape[0], size), **kwargs)
     else:
-        return resize(data, (size, data.shape[1]), **args)
+        return resize(data, (size, data.shape[1]), **kwargs)
 
 
 def crop(data, start_sample, length, axis):
@@ -66,7 +66,7 @@ def crop(data, start_sample, length, axis):
         raise OverflowError('Specified length exceeds the size of data')
 
 
-def pad_along_axis(array: np.ndarray, target_length, loc='end', axis=0, **args):
+def pad_along_axis(array: np.ndarray, target_length, loc='end', axis=0, **kwargs):
     """
 
     :param array: Input array to pad
@@ -91,7 +91,7 @@ def pad_along_axis(array: np.ndarray, target_length, loc='end', axis=0, **args):
     else:
         npad[axis] = (pad_size // 2, pad_size // 2)
 
-    return np.pad(array, pad_width=npad, **args)
+    return np.pad(array, pad_width=npad, **kwargs)
 
 
 def closest_number(big_num, small_num):
@@ -296,7 +296,7 @@ class Candidate(SigprocFile):
         self.snr_opt = -out[1]
         return out[0], -out[1]
 
-    def decimate(self, key, decimate_factor, axis, pad=False, **args):
+    def decimate(self, key, decimate_factor, axis, pad=False, **kwargs):
         """
         TODO: Update candidate parameters as per decimation factor
         :param key: Keywords to chose which data to decimate
@@ -307,14 +307,14 @@ class Candidate(SigprocFile):
         :return:
         """
         if key == 'dmt':
-            self.dmt = _decimate(self.dmt, decimate_factor, axis, pad, **args)
+            self.dmt = _decimate(self.dmt, decimate_factor, axis, pad, **kwargs)
         elif key == 'ft':
-            self.dedispersed = _decimate(self.dedispersed, decimate_factor, axis, pad, **args)
+            self.dedispersed = _decimate(self.dedispersed, decimate_factor, axis, pad, **kwargs)
         else:
             raise AttributeError('Key can either be "dmt": DM-Time or "ft": Frequency-Time')
         return self
 
-    def resize(self, key, size, axis, **args):
+    def resize(self, key, size, axis, **kwargs):
         """
         TODO: Update candidate parameters as per final size
         :param key: Keywords to chose which data to decimate
@@ -324,9 +324,9 @@ class Candidate(SigprocFile):
         :return:
         """
         if key == 'dmt':
-            self.dmt = _resize(self.dmt, size, axis, **args)
+            self.dmt = _resize(self.dmt, size, axis, **kwargs)
         elif key == 'ft':
-            self.dedispersed = _resize(self.dedispersed, size, axis, **args)
+            self.dedispersed = _resize(self.dedispersed, size, axis, **kwargs)
         else:
             raise AttributeError('Key can either be "dmt": DM-Time or "ft": Frequency-Time')
         return self
