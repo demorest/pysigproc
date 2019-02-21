@@ -234,13 +234,31 @@ class Candidate(SigprocFile):
             assert nf == len(self.chan_freqs)
             delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
             delay_bins = np.round(delay_time / self.tsamp).astype('int64')
-            dedisp_arr = np.zeros(self.data.shape)
+            dedisp_arr = np.zeros(self.data.shape,dtype=np.float32)
             for ii, delay in enumerate(delay_bins):
                 dedisp_arr[:, ii] = np.roll(self.data[:, ii], delay)
             self.dedispersed = dedisp_arr
         else:
             self.dedispersed = None
         return self
+
+    def dedisperse_ts(self, dms):
+        """
+        Dedisperse Frequency time data at a specified DM
+        :param dms: DM to dedisperse at
+        :return:
+        """
+        if self.data is not None:
+            nt, nf = self.data.shape
+            assert nf == len(self.chan_freqs)
+            delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
+            delay_bins = np.round(delay_time / self.tsamp).astype('int64')
+            dedisp_ar = np.zeros(nt,dtype=np.float32)
+            for ii, delay in enumerate(delay_bins):
+                dedisp_ar  += np.roll(self.data[:, ii], delay)
+            return dedisp_ar
+        else:
+            return None
 
     def dmtime(self, dmsteps=256):
         """
@@ -252,7 +270,7 @@ class Candidate(SigprocFile):
         dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
         dmt = np.zeros((dmsteps, self.data.shape[0]))
         for ii, dm in enumerate(tqdm.tqdm(dm_list)):
-            dmt[ii, :] = self.dedisperse(dms=dm).dedispersed.sum(1)
+            dmt[ii, :] = self.dedisperse_ts(dms=dm)
         self.dmt = dmt
         return self
 
