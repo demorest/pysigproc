@@ -63,7 +63,7 @@ def plot_h5(h5_file, show=False, save=True, detrend=True):
         ax3.imshow(dm_time, aspect='auto', extent=[ts[0], ts[-1], 2 * dm, 0], interpolation='none')
         ax3.set_ylabel(r'DM (pc cm$^{-3}$)')
         ax3.set_xlabel('Time (s)')
-        ax4.text(-0.6, 0, str_print, fontsize=14, ha='left', va='bottom', wrap=True)
+        ax4.text(0.2, 0, str_print, fontsize=14, ha='left', va='bottom', wrap=True)
         ax4.axis('off')
         plt.tight_layout()
         if save:
