@@ -6,9 +6,8 @@ from scipy.optimize import golden
 import tqdm
 from skimage.transform import resize
 import logging
-logger = logging.getLogger()
-logger = logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(threadName)s - %(levelname)s -'
-                                                        ' %(message)s')
+
+logger = logging.getLogger(__name__)
 
 def _decimate(data, decimate_factor, axis, pad=False, **kwargs):
     """
@@ -213,9 +212,11 @@ class Candidate(SigprocFile):
             nsamp = nchunk
         if nstart < 0:
             self.data = self.get_data(nstart=0, nsamp=nsamp+nstart)[:, 0, :]
+            logging.debug('median padding data as nstart < 0')
             self.data = pad_along_axis(self.data, nsamp, loc='start', axis=0, mode='median')
         elif nstart+nsamp > self.nspectra:
             self.data = self.get_data(nstart=nstart, nsamp=self.nspectra - nstart)[:, 0, :]
+            logging.debug('median padding data as nstop > nspectra')
             self.data = pad_along_axis(self.data, nsamp, loc='end', axis=0, mode='median')
         else:
             self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
@@ -234,31 +235,13 @@ class Candidate(SigprocFile):
             assert nf == len(self.chan_freqs)
             delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
             delay_bins = np.round(delay_time / self.tsamp).astype('int64')
-            dedisp_arr = np.zeros(self.data.shape,dtype=np.float32)
+            dedisp_arr = np.zeros(self.data.shape)
             for ii, delay in enumerate(delay_bins):
                 dedisp_arr[:, ii] = np.roll(self.data[:, ii], delay)
             self.dedispersed = dedisp_arr
         else:
             self.dedispersed = None
         return self
-
-    def dedisperse_ts(self, dms):
-        """
-        Dedisperse Frequency time data at a specified DM
-        :param dms: DM to dedisperse at
-        :return:
-        """
-        if self.data is not None:
-            nt, nf = self.data.shape
-            assert nf == len(self.chan_freqs)
-            delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
-            delay_bins = np.round(delay_time / self.tsamp).astype('int64')
-            dedisp_ar = np.zeros(nt,dtype=np.float32)
-            for ii, delay in enumerate(delay_bins):
-                dedisp_ar  += np.roll(self.data[:, ii], delay)
-            return dedisp_ar
-        else:
-            return None
 
     def dmtime(self, dmsteps=256):
         """
@@ -270,7 +253,7 @@ class Candidate(SigprocFile):
         dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
         dmt = np.zeros((dmsteps, self.data.shape[0]))
         for ii, dm in enumerate(tqdm.tqdm(dm_list)):
-            dmt[ii, :] = self.dedisperse_ts(dms=dm)
+            dmt[ii, :] = self.dedisperse(dms=dm).dedispersed.sum(1)
         self.dmt = dmt
         return self
 
@@ -325,9 +308,13 @@ class Candidate(SigprocFile):
         :return:
         """
         if key == 'dmt':
+            logging.debug(f'Decimating dmt along axis {axis}, with factor {decimate_factor},  pre-decimation shape: {self.dmt.shape}')
             self.dmt = _decimate(self.dmt, decimate_factor, axis, pad, **kwargs)
+            logging.debug(f'Decimated dmt along axis {axis}, post-decimation shape: {self.dmt.shape}')
         elif key == 'ft':
+            logging.debug(f'Decimating ft along axis {axis}, with factor {decimate_factor}, pre-decimation shape: {self.dedispersed.shape}')
             self.dedispersed = _decimate(self.dedispersed, decimate_factor, axis, pad, **kwargs)
+            logging.debug(f'Decimated ft along axis {axis}, post-decimation shape: {self.dedispersed.shape}')
         else:
             raise AttributeError('Key can either be "dmt": DM-Time or "ft": Frequency-Time')
         return self
