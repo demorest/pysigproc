@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-import numpy as np
-import h5py
-from pysigproc import SigprocFile
-from scipy.optimize import golden
-import tqdm
-from skimage.transform import resize
 import logging
 
+import h5py
+import numpy as np
+import tqdm
+from scipy.optimize import golden
+from skimage.transform import resize
+
+from pysigproc import SigprocFile
+
 logger = logging.getLogger(__name__)
+
 
 def _decimate(data, decimate_factor, axis, pad=False, **kwargs):
     """
@@ -27,9 +30,9 @@ def _decimate(data, decimate_factor, axis, pad=False, **kwargs):
         raise AttributeError('Axis length should be a multiple of decimate_factor. Use pad=True to force decimation')
 
     if axis:
-        return data.reshape(data.shape[0], data.shape[1]//decimate_factor, decimate_factor).mean(2)
+        return data.reshape(data.shape[0], data.shape[1] // decimate_factor, decimate_factor).mean(2)
     else:
-        return data.reshape(data.shape[0]//decimate_factor, decimate_factor, data.shape[1]).mean(1)
+        return data.reshape(data.shape[0] // decimate_factor, decimate_factor, data.shape[1]).mean(1)
 
 
 def _resize(data, size, axis, **kwargs):
@@ -58,7 +61,7 @@ def crop(data, start_sample, length, axis):
     """
     if data.shape[axis] >= start_sample + length:
         if axis:
-            return data[:, start_sample:start_sample+length]
+            return data[:, start_sample:start_sample + length]
         else:
             return data[start_sample:start_sample + length, :]
     else:
@@ -211,10 +214,10 @@ class Candidate(SigprocFile):
             nstart -= (nchunk - nsamp) // 2
             nsamp = nchunk
         if nstart < 0:
-            self.data = self.get_data(nstart=0, nsamp=nsamp+nstart)[:, 0, :]
+            self.data = self.get_data(nstart=0, nsamp=nsamp + nstart)[:, 0, :]
             logging.debug('median padding data as nstart < 0')
             self.data = pad_along_axis(self.data, nsamp, loc='start', axis=0, mode='median')
-        elif nstart+nsamp > self.nspectra:
+        elif nstart + nsamp > self.nspectra:
             self.data = self.get_data(nstart=nstart, nsamp=self.nspectra - nstart)[:, 0, :]
             logging.debug('median padding data as nstop > nspectra')
             self.data = pad_along_axis(self.data, nsamp, loc='end', axis=0, mode='median')
@@ -235,13 +238,31 @@ class Candidate(SigprocFile):
             assert nf == len(self.chan_freqs)
             delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
             delay_bins = np.round(delay_time / self.tsamp).astype('int64')
-            dedisp_arr = np.zeros(self.data.shape)
-            for ii, delay in enumerate(delay_bins):
-                dedisp_arr[:, ii] = np.roll(self.data[:, ii], delay)
-            self.dedispersed = dedisp_arr
+            self.dedispersed = np.zeros(self.data.shape, dtype=np.float32)
+            for ii in range(nf):
+                self.dedispersed[:, ii] = np.concatenate(
+                    [self.data[-delay_bins[ii]:, ii], self.data[:-delay_bins[ii], ii]])
         else:
             self.dedispersed = None
         return self
+
+    def dedispersets(self, dms=None):
+        """
+        Dedisperse Frequency time data at a specified DM and return a time series
+        :param dms: DM to dedisperse at
+        :return: time series
+        """
+        if dms is None:
+            dms = self.dm
+        if self.data is not None:
+            nt, nf = self.data.shape
+            assert nf == len(self.chan_freqs)
+            delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
+            delay_bins = np.round(delay_time / self.tsamp).astype('int64')
+            ts = np.zeros(nt, dtype=np.float32)
+            for ii in range(nf):
+                ts += np.concatenate([self.data[-delay_bins[ii]:, ii], self.data[:-delay_bins[ii], ii]])
+            return ts
 
     def dmtime(self, dmsteps=256):
         """
@@ -251,10 +272,9 @@ class Candidate(SigprocFile):
         """
         range_dm = self.dm
         dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
-        dmt = np.zeros((dmsteps, self.data.shape[0]))
+        self.dmt = np.zeros((dmsteps, self.data.shape[0]), dtype=np.float32)
         for ii, dm in enumerate(tqdm.tqdm(dm_list)):
-            dmt[ii, :] = self.dedisperse(dms=dm).dedispersed.sum(1)
-        self.dmt = dmt
+            self.dmt[ii, :] = self.dedispersets(dms=dm)
         return self
 
     def get_snr(self, time_series=None):
@@ -286,7 +306,7 @@ class Candidate(SigprocFile):
             return None
 
         def dm2snr(dm):
-            time_series = self.dedisperse(dm).dedispersed.sum(1)
+            time_series = self.dedispersets(dm)
             return -self.get_snr(time_series)
 
         try:
@@ -308,11 +328,13 @@ class Candidate(SigprocFile):
         :return:
         """
         if key == 'dmt':
-            logging.debug(f'Decimating dmt along axis {axis}, with factor {decimate_factor},  pre-decimation shape: {self.dmt.shape}')
+            logging.debug(
+                f'Decimating dmt along axis {axis}, with factor {decimate_factor},  pre-decimation shape: {self.dmt.shape}')
             self.dmt = _decimate(self.dmt, decimate_factor, axis, pad, **kwargs)
             logging.debug(f'Decimated dmt along axis {axis}, post-decimation shape: {self.dmt.shape}')
         elif key == 'ft':
-            logging.debug(f'Decimating ft along axis {axis}, with factor {decimate_factor}, pre-decimation shape: {self.dedispersed.shape}')
+            logging.debug(
+                f'Decimating ft along axis {axis}, with factor {decimate_factor}, pre-decimation shape: {self.dedispersed.shape}')
             self.dedispersed = _decimate(self.dedispersed, decimate_factor, axis, pad, **kwargs)
             logging.debug(f'Decimated ft along axis {axis}, post-decimation shape: {self.dedispersed.shape}')
         else:
