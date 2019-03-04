@@ -3,7 +3,6 @@ import logging
 
 import h5py
 import numpy as np
-import tqdm
 from scipy.optimize import golden
 from skimage.transform import resize
 
@@ -273,7 +272,7 @@ class Candidate(SigprocFile):
         range_dm = self.dm
         dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
         self.dmt = np.zeros((dmsteps, self.data.shape[0]), dtype=np.float32)
-        for ii, dm in enumerate(tqdm.tqdm(dm_list)):
+        for ii, dm in enumerate(dm_list):
             self.dmt[ii, :] = self.dedispersets(dms=dm)
         return self
 
