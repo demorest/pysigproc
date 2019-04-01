@@ -110,7 +110,7 @@ def closest_number(big_num, small_num):
 
 
 class Candidate(SigprocFile):
-    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256):
+    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256, device=0):
         """
 
         :param fp: Filepath of the filterbank
@@ -120,6 +120,7 @@ class Candidate(SigprocFile):
         :param label: Label of the candidate (1: for FRB, 0: for RFI)
         :param snr: SNR of the candidate
         :param min_samp: Minimum number of time samples to read
+        :param device: If using GPUs, device is the GPU id
         """
         SigprocFile.__init__(self, fp)
         self.dm = dm
@@ -131,6 +132,7 @@ class Candidate(SigprocFile):
         self.data = None
         self.dedispersed = None
         self.dmt = None
+        self.device = device
         self.min_samp = min_samp
         self.dm_opt = -1
         self.snr_opt = -1
@@ -224,7 +226,7 @@ class Candidate(SigprocFile):
             self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
         return self
 
-    def dedisperse(self, dms=None):
+    def dedisperse(self, dms=None, target='CPU'):
         """
         Dedisperse Frequency time data at a specified DM
         :param dms: DM to dedisperse at
@@ -233,14 +235,18 @@ class Candidate(SigprocFile):
         if dms is None:
             dms = self.dm
         if self.data is not None:
-            nt, nf = self.data.shape
-            assert nf == len(self.chan_freqs)
-            delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
-            delay_bins = np.round(delay_time / self.tsamp).astype('int64')
-            self.dedispersed = np.zeros(self.data.shape, dtype=np.float32)
-            for ii in range(nf):
-                self.dedispersed[:, ii] = np.concatenate(
-                    [self.data[-delay_bins[ii]:, ii], self.data[:-delay_bins[ii], ii]])
+            if target == 'CPU':
+                nt, nf = self.data.shape
+                assert nf == len(self.chan_freqs)
+                delay_time = 4148808.0 * dms * (1 / (self.chan_freqs[0]) ** 2 - 1 / (self.chan_freqs) ** 2) / 1000
+                delay_bins = np.round(delay_time / self.tsamp).astype('int64')
+                self.dedispersed = np.zeros(self.data.shape, dtype=np.float32)
+                for ii in range(nf):
+                    self.dedispersed[:, ii] = np.concatenate(
+                        [self.data[-delay_bins[ii]:, ii], self.data[:-delay_bins[ii], ii]])
+            elif target == 'GPU':
+                from gpu_utils import gpu_dedisperse
+                gpu_dedisperse(self, device=self.device)
         else:
             self.dedispersed = None
         return self
@@ -263,17 +269,21 @@ class Candidate(SigprocFile):
                 ts += np.concatenate([self.data[-delay_bins[ii]:, ii], self.data[:-delay_bins[ii], ii]])
             return ts
 
-    def dmtime(self, dmsteps=256):
+    def dmtime(self, dmsteps=256, target='CPU'):
         """
         Generates DM-time array of the candidate by dedispersing at adjacent DM values
         dmsteps: Number of DMs to dedisperse at
         :return:
         """
-        range_dm = self.dm
-        dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
-        self.dmt = np.zeros((dmsteps, self.data.shape[0]), dtype=np.float32)
-        for ii, dm in enumerate(dm_list):
-            self.dmt[ii, :] = self.dedispersets(dms=dm)
+        if target == 'CPU':
+            range_dm = self.dm
+            dm_list = self.dm + np.linspace(-range_dm, range_dm, dmsteps)
+            self.dmt = np.zeros((dmsteps, self.data.shape[0]), dtype=np.float32)
+            for ii, dm in enumerate(dm_list):
+                self.dmt[ii, :] = self.dedispersets(dms=dm)
+        elif target == 'GPU':
+            from gpu_utils import gpu_dmt
+            gpu_dmt(self, device=self.device)
         return self
 
     def get_snr(self, time_series=None):
