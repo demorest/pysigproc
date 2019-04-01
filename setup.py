@@ -13,7 +13,7 @@ setup(name='pysigproc',
       url='http://github.com/devanshkv/pysigproc',
       install_requires=['numpy', 'h5py', 'scikit-image', 'scipy', 'numba'],
       packages=find_packages(),
-      py_modules={'pysigproc', 'candidate'},
+      py_modules={'pysigproc', 'candidate', 'gpu_utils'},
       scripts=['bin/h5plotter.py'],
       classifiers=[
           'Natural Language :: English',
