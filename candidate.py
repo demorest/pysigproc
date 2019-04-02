@@ -58,11 +58,13 @@ def crop(data, start_sample, length, axis):
     :param axis: Axis to crop
     :return:
     """
-    if data.shape[axis] >= start_sample + length:
+    if data.shape[axis] > start_sample + length:
         if axis:
             return data[:, start_sample:start_sample + length]
         else:
             return data[start_sample:start_sample + length, :]
+    elif data.shape[axis] == length:
+        return data
     else:
         raise OverflowError('Specified length exceeds the size of data')
 
