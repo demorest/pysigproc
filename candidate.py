@@ -112,7 +112,7 @@ def closest_number(big_num, small_num):
 
 
 class Candidate(SigprocFile):
-    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256, device=0):
+    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256, device=0, kill_mask=None):
         """
 
         :param fp: Filepath of the filterbank
@@ -123,6 +123,7 @@ class Candidate(SigprocFile):
         :param snr: SNR of the candidate
         :param min_samp: Minimum number of time samples to read
         :param device: If using GPUs, device is the GPU id
+        :param kill_mask: Boolean mask of channels to kill
         """
         SigprocFile.__init__(self, fp)
         self.dm = dm
@@ -138,6 +139,7 @@ class Candidate(SigprocFile):
         self.min_samp = min_samp
         self.dm_opt = -1
         self.snr_opt = -1
+        self.kill_mask = kill_mask
 
     def save_h5(self, out_dir=None, fnout=None):
         """
@@ -226,6 +228,11 @@ class Candidate(SigprocFile):
             self.data = pad_along_axis(self.data, nsamp, loc='end', axis=0, mode='median')
         else:
             self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
+        self.data.setflags(write=1)
+
+        if self.kill_mask.any():
+            assert len(self.kill_mask) == self.data.shape[1]
+            self.data[:,self.kill_mask] = 0
         return self
 
     def dedisperse(self, dms=None, target='CPU'):
