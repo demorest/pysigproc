@@ -228,14 +228,13 @@ class Candidate(SigprocFile):
             self.data = pad_along_axis(self.data, nsamp, loc='end', axis=0, mode='median')
         else:
             self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
-            
-        if self.kill_mask is not None:
+
+        if self.kill_mask.any():
             assert len(self.kill_mask) == self.data.shape[1]
             data_copy = self.data.copy()
             data_copy[:,self.kill_mask] = 0
             self.data = data_copy
             del data_copy
-            
         return self
 
     def dedisperse(self, dms=None, target='CPU'):
