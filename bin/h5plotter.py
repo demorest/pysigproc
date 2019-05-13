@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import scipy.signal as s
 from matplotlib import gridspec
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 
 
 def plot_h5(h5_file, show=False, save=True, detrend=True):
