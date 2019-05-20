@@ -229,7 +229,7 @@ class Candidate(SigprocFile):
         else:
             self.data = self.get_data(nstart=nstart, nsamp=nsamp)[:, 0, :]
 
-        if self.kill_mask.any():
+        if self.kill_mask is not None:
             assert len(self.kill_mask) == self.data.shape[1]
             data_copy = self.data.copy()
             data_copy[:,self.kill_mask] = 0
