@@ -216,7 +216,7 @@ def gpu_dedisp_and_dmt_crop(cand, device=0):
     all_delays = cuda.to_device(disp_time, stream=stream)
 
     @cuda.jit
-    def gpu_dmt(cand_data_in, all_delays, dms, cand_data_out, tsamp, time_decimation_factor):
+    def gpu_dmt(cand_data_in, all_delays, dms, cand_data_out, time_decimation_factor):
         ii, jj, kk = cuda.grid(3)
         if ii < cand_data_in.shape[0] and jj < cand_data_in.shape[1] and kk < dms.shape[0]:
             cuda.atomic.add(cand_data_out, (kk, int(jj / time_decimation_factor)),
@@ -230,7 +230,7 @@ def gpu_dedisp_and_dmt_crop(cand, device=0):
     blockspergrid = (blockspergrid_x, blockspergrid_y, blockspergrid_z)
 
     gpu_dmt[blockspergrid, threadsperblock_3d, stream](cand_data_in, all_delays, dm_list, dmt_on_device,
-                                                       float(cand.tsamp), int(time_decimation_factor))
+                                                       int(time_decimation_factor))
 
     crop_time[blockspergrid_2d_out, threadsperblock_2d, stream](dmt_on_device, dmt_return,
                                                                 int(int(cand_dedispersed_on_device.shape[1] / 2) - 128))
