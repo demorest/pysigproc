@@ -170,12 +170,13 @@ class Candidate(SigprocFile):
                 else:
                     f.attrs[key] = b'None'
 
-            freq_time_dset = f.create_dataset('data_freq_time', data=self.dedispersed)
+            freq_time_dset = f.create_dataset('data_freq_time', data=self.dedispersed, dtype=self.dedispersed.dtype,
+                                              compression="lzf")
             freq_time_dset.dims[0].label = b"time"
             freq_time_dset.dims[1].label = b"frequency"
 
             if self.dmt is not None:
-                dm_time_dset = f.create_dataset('data_dm_time', data=self.dmt)
+                dm_time_dset = f.create_dataset('data_dm_time', data=self.dmt, dtype=self.dmt.dtype, compression="lzf")
                 dm_time_dset.dims[0].label = b"dm"
                 dm_time_dset.dims[1].label = b"time"
         return fnout
@@ -232,7 +233,7 @@ class Candidate(SigprocFile):
         if self.kill_mask is not None:
             assert len(self.kill_mask) == self.data.shape[1]
             data_copy = self.data.copy()
-            data_copy[:,self.kill_mask] = 0
+            data_copy[:, self.kill_mask] = 0
             self.data = data_copy
             del data_copy
         return self
