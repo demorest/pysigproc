@@ -112,10 +112,12 @@ def closest_number(big_num, small_num):
 
 
 class Candidate(SigprocFile):
-    def __init__(self, fp=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256, device=0, kill_mask=None):
+    def __init__(self, fp=None, copy_hdr=None, dm=None, tcand=0, width=0, label=-1, snr=0, min_samp=256, device=0,
+                 kill_mask=None):
         """
 
         :param fp: Filepath of the filterbank
+        :param copy_hdr: Custom header to the filterbank file
         :param dm: DM of the candidate
         :param tcand: Time of the candidate in filterbank file (seconds)
         :param width: Width of the candidate (number of samples)
@@ -125,7 +127,7 @@ class Candidate(SigprocFile):
         :param device: If using GPUs, device is the GPU id
         :param kill_mask: Boolean mask of channels to kill
         """
-        SigprocFile.__init__(self, fp)
+        SigprocFile.__init__(self, fp, copy_hdr)
         self.dm = dm
         self.tcand = tcand
         self.width = width
