@@ -4,11 +4,13 @@
 # files from python.  Not all possible features are implemented.
 # now works with python3 also!
 
-import sys
-import struct
-from collections import OrderedDict
 import mmap
+import struct
+import sys
+from collections import OrderedDict
+
 import numpy
+
 
 class SigprocFile(object):
 
@@ -48,8 +50,8 @@ class SigprocFile(object):
             except TypeError:
                 self.fp = fp
             self.read_header(self.fp)
-            self._mmdata = mmap.mmap(self.fp.fileno(), 0, mmap.MAP_PRIVATE, 
-                    mmap.PROT_READ)
+            self._mmdata = mmap.mmap(self.fp.fileno(), 0, mmap.MAP_PRIVATE,
+                                     mmap.PROT_READ)
 
     ## See sigproc send_stuff.c
 
@@ -86,7 +88,7 @@ class SigprocFile(object):
     def get_string(fp):
         """Read the next sigproc-format string in the file."""
         nchar = struct.unpack('i',fp.read(4))[0]
-        if nchar>80 or nchar<1: 
+        if nchar > 80 or nchar < 1:
             return (None, 0)
         out = fp.read(nchar)
         return (out, nchar+4)
@@ -97,7 +99,8 @@ class SigprocFile(object):
         self.hdrbytes = 0
         (s,n) = self.get_string(self.fp)
         if s != b'HEADER_START':
-            raise RuntimeError("File does not start with HEADER_START (read '%s')" % s)
+            self.hdrbytes = 0
+            return None
         self.hdrbytes += n
         while True:
             (s,n) = self.get_string(self.fp)
@@ -138,11 +141,11 @@ class SigprocFile(object):
     def tend(self):
         return self.tstart + self.nspectra*self.tsamp/86400.0
 
-    def get_data(self,nstart,nsamp):
+    def get_data(self, nstart, nsamp, offset=0):
         """Return nsamp time slices starting at nstart."""
         bstart = int(nstart) * self.bytes_per_spectrum
         nbytes = int(nsamp) * self.bytes_per_spectrum
-        b0 = self.hdrbytes + bstart
+        b0 = self.hdrbytes + bstart + offset
         b1 = b0 + nbytes
         return numpy.frombuffer(self._mmdata[int(b0):int(b1)],
                 dtype=self.dtype).reshape((-1,self.nifs,self.nchans))
