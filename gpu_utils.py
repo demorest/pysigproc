@@ -158,20 +158,20 @@ def gpu_dedisp_and_dmt_crop(cand, device=0):
     else:
         time_decimation_factor = cand.width // 2
 
-    assert cand.data.shape[1] % 256 == 0
+    #assert cand.data.shape[1] % 256 == 0
 
-    frequency_decimation_factor = cand.data.shape[1] // 256
+    frequency_decimation_factor = math.floor(cand.data.shape[1] // 256)
 
     stream = cuda.stream()
 
     chan_freqs = cuda.to_device(np.array(cand.chan_freqs, dtype=np.float32), stream=stream)
-    cand_data_in = cuda.to_device(np.array(cand.data.T, dtype=np.uint8), stream=stream)
-    dmt_on_device = cuda.device_array((256, cand.data.shape[0] // time_decimation_factor), dtype=np.float32,
+    cand_data_in = cuda.to_device(np.array(cand.data.T, dtype=np.float32), stream=stream)
+    dmt_on_device = cuda.device_array((256, int(cand.data.shape[0] // time_decimation_factor)), dtype=np.float32,
                                       stream=stream)
-    cand_dedispersed_on_device = cuda.device_array((256, cand.data.shape[0] // time_decimation_factor),
+    cand_dedispersed_on_device = cuda.device_array((int(cand.data.shape[1]/frequency_decimation_factor), int(cand.data.shape[0] // time_decimation_factor)),
                                                    dtype=np.float32, stream=stream)
-    cand_dedispersed_out = cuda.device_array(shape=(256, 256), dtype=np.float32, stream=stream)
-    dmt_return = cuda.device_array_like(cand_dedispersed_out)
+    cand_dedispersed_out = cuda.device_array(shape=(int(cand.data.shape[1]/frequency_decimation_factor), 256), dtype=np.float32, stream=stream)
+    dmt_return = cuda.device_array(shape=(256,256), dtype=np.float32, stream=stream)
     dm_list = cuda.to_device(np.linspace(0, 2 * cand.dm, 256, dtype=np.float32), stream=stream)
 
     @cuda.jit
