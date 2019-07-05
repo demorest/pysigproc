@@ -165,7 +165,7 @@ def gpu_dedisp_and_dmt_crop(cand, device=0):
     stream = cuda.stream()
 
     chan_freqs = cuda.to_device(np.array(cand.chan_freqs, dtype=np.float32), stream=stream)
-    cand_data_in = cuda.to_device(np.array(cand.data.T, dtype=np.float32), stream=stream)
+    cand_data_in = cuda.to_device(np.array(cand.data.T, dtype=cand.data.dtype), stream=stream)
     dmt_on_device = cuda.device_array((256, int(cand.data.shape[0] // time_decimation_factor)), dtype=np.float32,
                                       stream=stream)
     cand_dedispersed_on_device = cuda.device_array((int(cand.data.shape[1]/frequency_decimation_factor), int(cand.data.shape[0] // time_decimation_factor)),
