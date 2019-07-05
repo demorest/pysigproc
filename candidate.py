@@ -29,9 +29,9 @@ def _decimate(data, decimate_factor, axis, pad=False, **kwargs):
         raise AttributeError('Axis length should be a multiple of decimate_factor. Use pad=True to force decimation')
 
     if axis:
-        return data.reshape(data.shape[0], data.shape[1] // decimate_factor, decimate_factor).mean(2)
+        return data.reshape(int(data.shape[0]), int(data.shape[1] // decimate_factor), int(decimate_factor)).mean(2)
     else:
-        return data.reshape(data.shape[0] // decimate_factor, decimate_factor, data.shape[1]).mean(1)
+        return data.reshape(int(data.shape[0] // decimate_factor), int(decimate_factor), int(data.shape[1])).mean(1)
 
 
 def _resize(data, size, axis, **kwargs):
@@ -88,11 +88,11 @@ def pad_along_axis(array: np.ndarray, target_length, loc='end', axis=0, **kwargs
     npad = [(0, 0) for x in range(axis_nb)]
 
     if loc == 'start':
-        npad[axis] = (pad_size, 0)
+        npad[axis] = (int(pad_size), 0)
     elif loc == 'end':
-        npad[axis] = (0, pad_size)
+        npad[axis] = (0, int(pad_size))
     else:
-        npad[axis] = (pad_size // 2, pad_size // 2)
+        npad[axis] = (int(pad_size // 2), int(pad_size // 2))
 
     return np.pad(array, pad_width=npad, **kwargs)
 
