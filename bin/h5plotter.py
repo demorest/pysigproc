@@ -53,16 +53,16 @@ def plot_h5(h5_file, show=False, save=True, detrend=True):
                                                                              f.attrs['snr'], f.attrs['snr_opt'], \
                                                                              f.attrs['width']
         if width > 1:
-            ts = np.arange(freq_time.shape[1]) * tsamp * np.min([1, width // 2])
+            ts = np.linspace(-128,128,256) * tsamp * width*1000 / 2
         else:
-            ts = np.arange(freq_time.shape[1]) * tsamp * np.min([1, width])
+            ts = np.linspace(-128,128,256) * tsamp* 1000
         ax1.plot(ts, freq_time.sum(0), 'k-')
         ax1.set_ylabel('Flux (Arb. Units)')
         ax2.imshow(freq_time, aspect='auto', extent=[ts[0], ts[-1], fch1, fch1 + (nchan * foff)], interpolation='none')
         ax2.set_ylabel('Frequency (MHz)')
         ax3.imshow(dm_time, aspect='auto', extent=[ts[0], ts[-1], 2 * dm, 0], interpolation='none')
         ax3.set_ylabel(r'DM (pc cm$^{-3}$)')
-        ax3.set_xlabel('Time (s)')
+        ax3.set_xlabel('Time (ms)')
         ax4.text(0.2, 0, str_print, fontsize=14, ha='left', va='bottom', wrap=True)
         ax4.axis('off')
         plt.tight_layout()
@@ -72,6 +72,7 @@ def plot_h5(h5_file, show=False, save=True, detrend=True):
             plt.show()
         else:
             plt.close()
+        return h5_file[:-3] + '.png'
 
 
 if __name__ == '__main__':
