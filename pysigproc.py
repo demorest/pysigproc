@@ -35,14 +35,14 @@ class SigprocFile(object):
 
     def __init__(self,fp=None,copy_hdr=None):
         # init all items to None
-        for k in self._type.keys():
+        for k in list(self._type.keys()):
             setattr(self, k, None)
         if copy_hdr is not None:
-            for k in self._type.keys():
+            for k in list(self._type.keys()):
                 setattr(self,k,getattr(copy_hdr,k))
         if fp is not None:
             try:
-                self.fp = open(fp,'r')
+                self.fp = open(fp,'rb')
             except TypeError:
                 self.fp = fp
             self.read_header(self.fp)
@@ -54,7 +54,7 @@ class SigprocFile(object):
     @staticmethod
     def send_string(val,f=sys.stdout):
         f.write(struct.pack('i',len(val)))
-        f.write(val)
+        f.write(val.encode('utf-8'))
 
     def send_num(self,name,val,f=sys.stdout):
         self.send_string(name,f)
@@ -73,7 +73,7 @@ class SigprocFile(object):
 
     def filterbank_header(self,fout=sys.stdout):
         self.send_string("HEADER_START",f=fout)
-        for k in self._type.keys():
+        for k in list(self._type.keys()):
             self.send(k,fout)
         self.send_string("HEADER_END",f=fout)
 
@@ -86,7 +86,7 @@ class SigprocFile(object):
         if nchar>80 or nchar<1: 
             return (None, 0)
         out = fp.read(nchar)
-        return (out, nchar+4)
+        return (out.decode('utf-8'), nchar+4)
 
     def read_header(self,fp=None):
         """Read the header from the specified file pointer."""
@@ -124,11 +124,11 @@ class SigprocFile(object):
 
     @property
     def bytes_per_spectrum(self):
-        return self.nbits * self.nchans * self.nifs / 8
+        return self.nbits * self.nchans * self.nifs // 8
 
     @property
     def nspectra(self):
-        return (self._mmdata.size() - self.hdrbytes) / self.bytes_per_spectrum
+        return (self._mmdata.size() - self.hdrbytes) // self.bytes_per_spectrum
 
     @property
     def tend(self):
@@ -152,13 +152,13 @@ class SigprocFile(object):
         b0 = self.hdrbytes + bstart
         b1 = b0 + nbytes
         # reshape with the frequency axis reduced by packing factor
-        fac = 8 / self.nbits
+        fac = 8 // self.nbits
         d = numpy.frombuffer(self._mmdata[b0:b1],
                 dtype=numpy.uint8).reshape(
-                        (nsamp,self.nifs,self.nchans/fac))
+                        (nsamp,self.nifs,self.nchans//fac))
         unpacked = numpy.empty((nsamp,self.nifs,self.nchans),
                 dtype=numpy.float32)
-        for i in xrange(fac):
+        for i in range(fac):
             mask = 2**(self.nbits*i)*(2**self.nbits-1)
             unpacked[...,i::fac] = (d & mask) / 2**(i*self.nbits)
         return unpacked
