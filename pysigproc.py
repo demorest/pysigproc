@@ -2,12 +2,15 @@
 #
 # Simple functions for generating sigproc filterbank
 # files from python.  Not all possible features are implemented.
+# now works with python3 also!
 
-import sys
-import struct
-from collections import OrderedDict
 import mmap
+import struct
+import sys
+from collections import OrderedDict
+
 import numpy
+
 
 class SigprocFile(object):
 
@@ -17,6 +20,7 @@ class SigprocFile(object):
     _type['source_name'] = 'string'
     _type['machine_id'] = 'int'
     _type['barycentric'] = 'int'
+    _type['pulsarcentric'] = 'int'
     _type['telescope_id'] = 'int'
     _type['src_raj'] = 'double'
     _type['src_dej'] = 'double'
@@ -46,13 +50,14 @@ class SigprocFile(object):
             except TypeError:
                 self.fp = fp
             self.read_header(self.fp)
-            self._mmdata = mmap.mmap(self.fp.fileno(), 0, mmap.MAP_PRIVATE, 
-                    mmap.PROT_READ)
+            self._mmdata = mmap.mmap(self.fp.fileno(), 0, mmap.MAP_PRIVATE,
+                                     mmap.PROT_READ)
 
     ## See sigproc send_stuff.c
 
     @staticmethod
     def send_string(val,f=sys.stdout):
+        val=val.encode()
         f.write(struct.pack('i',len(val)))
         f.write(val.encode('utf-8'))
 
@@ -83,7 +88,7 @@ class SigprocFile(object):
     def get_string(fp):
         """Read the next sigproc-format string in the file."""
         nchar = struct.unpack('i',fp.read(4))[0]
-        if nchar>80 or nchar<1: 
+        if nchar > 80 or nchar < 1:
             return (None, 0)
         out = fp.read(nchar)
         return (out.decode('utf-8'), nchar+4)
@@ -93,11 +98,13 @@ class SigprocFile(object):
         if fp is not None: self.fp = fp
         self.hdrbytes = 0
         (s,n) = self.get_string(self.fp)
-        if s != 'HEADER_START':
-            raise RuntimeError("File does not start with HEADER_START (read '%s')" % s)
+        if s != b'HEADER_START':
+            self.hdrbytes = 0
+            return None
         self.hdrbytes += n
         while True:
             (s,n) = self.get_string(self.fp)
+            s=s.decode()
             self.hdrbytes += n
             if s == 'HEADER_END': return
             if self._type[s] == 'string':
@@ -134,13 +141,13 @@ class SigprocFile(object):
     def tend(self):
         return self.tstart + self.nspectra*self.tsamp/86400.0
 
-    def get_data(self,nstart,nsamp):
+    def get_data(self, nstart, nsamp, offset=0):
         """Return nsamp time slices starting at nstart."""
         bstart = int(nstart) * self.bytes_per_spectrum
         nbytes = int(nsamp) * self.bytes_per_spectrum
-        b0 = self.hdrbytes + bstart
+        b0 = self.hdrbytes + bstart + (offset*self.bytes_per_spectrum)
         b1 = b0 + nbytes
-        return numpy.frombuffer(self._mmdata[b0:b1],
+        return numpy.frombuffer(self._mmdata[int(b0):int(b1)],
                 dtype=self.dtype).reshape((-1,self.nifs,self.nchans))
 
     def unpack(self,nstart,nsamp):
@@ -166,3 +173,7 @@ class SigprocFile(object):
     @property
     def chan_freqs(self):
         return self.fch1 + numpy.arange(self.nchans)*self.foff
+
+    @property
+    def bandpass(self):
+        return self.get_data(nstart=0,nsamp=int(self.nspectra))[:,0,:].mean(0)
